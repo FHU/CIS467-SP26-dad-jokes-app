@@ -13,7 +13,7 @@ CMD [ "npm", "run", "dev"]
 # ---- Build Stage ----
 FROM base AS build 
 
-RUN npm install
+RUN npm run build
 
 
 # ---- Production Stage ----
