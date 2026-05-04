@@ -18,6 +18,46 @@ interface Joke {
 const API_BASE = "/api";
 
 // ---------------------------------------------------------------------------
+// ShareBar component
+// ---------------------------------------------------------------------------
+function ShareBar({ joke }: { joke: Joke }) {
+  const [copied, setCopied] = useState(false);
+
+  const text = `😂 ${joke.setup}\n\n👉 ${joke.punchline}\n\n— via Dad Jokes Central`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleShare = () => {
+    navigator.share?.({
+      title: "Dad Joke 😂",
+      text: `${joke.setup}\n\n${joke.punchline}`,
+    });
+  };
+
+  return (
+    <div style={styles.shareBar}>
+      <span style={styles.shareLabel}>Share</span>
+      <button
+        onClick={handleCopy}
+        style={{ ...styles.shareBtn, ...(copied ? styles.shareBtnCopied : {}) }}
+      >
+        {copied ? "✓ Copied!" : "📋 Copy"}
+      </button>
+      {!!navigator.share && (
+        <button onClick={handleShare} style={styles.shareBtn}>
+          🔗 Share
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 export default function App() {
@@ -120,12 +160,8 @@ export default function App() {
     <div style={styles.page}>
       {/* Header */}
       <header style={styles.header}>
-        <h1 style={styles.title}>
-          🧔 Dad Jokes Central 🧔
-        </h1>
-        <p style={styles.subtitle}>
-          Where every joke is a groan-er
-        </p>
+        <h1 style={styles.title}>🧔 Dad Jokes Central 🧔</h1>
+        <p style={styles.subtitle}>Where every joke is a groan-er</p>
         <div style={styles.statusDot}>
           <span
             style={{
@@ -135,7 +171,8 @@ export default function App() {
             }}
           />
           <span style={{ fontSize: "0.75rem", color: "#aaa" }}>
-            API {healthy === null ? "checking…" : healthy ? "connected" : "offline"}
+            API{" "}
+            {healthy === null ? "checking…" : healthy ? "connected" : "offline"}
           </span>
         </div>
       </header>
@@ -151,7 +188,11 @@ export default function App() {
               ...(view === v ? styles.navBtnActive : {}),
             }}
           >
-            {v === "random" ? "🎲 Random" : v === "browse" ? "📖 Browse" : "✏️ Add"}
+            {v === "random"
+              ? "🎲 Random"
+              : v === "browse"
+                ? "📖 Browse"
+                : "✏️ Add"}
           </button>
         ))}
       </nav>
@@ -196,6 +237,7 @@ export default function App() {
                     ))}
                   </div>
                 )}
+                {showPunchline && <ShareBar joke={joke} />}
               </>
             ) : (
               <p style={{ color: "#aaa" }}>Hit the button to get a joke!</p>
@@ -205,7 +247,11 @@ export default function App() {
               onClick={fetchRandom}
               disabled={loading}
             >
-              {loading ? "Loading…" : joke ? "Another One! 🔄" : "Get a Joke 🎲"}
+              {loading
+                ? "Loading…"
+                : joke
+                  ? "Another One! 🔄"
+                  : "Get a Joke 🎲"}
             </button>
           </div>
         )}
@@ -238,10 +284,13 @@ export default function App() {
                     ★ {Number(j.rating).toFixed(1)} · Told {j.times_told}×
                   </span>
                 </div>
+                <ShareBar joke={j} />
               </div>
             ))}
             {allJokes.length === 0 && (
-              <p style={{ color: "#aaa", textAlign: "center" }}>No jokes found.</p>
+              <p style={{ color: "#aaa", textAlign: "center" }}>
+                No jokes found.
+              </p>
             )}
           </div>
         )}
@@ -269,13 +318,20 @@ export default function App() {
               onChange={(e) => setNewCategory(e.target.value)}
               style={styles.select}
             >
-              {["general", "science", "food", "animals", "tech", "work", "nature", "sports"].map(
-                (c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                )
-              )}
+              {[
+                "general",
+                "science",
+                "food",
+                "animals",
+                "tech",
+                "work",
+                "nature",
+                "sports",
+              ].map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
             <button style={styles.primaryBtn} onClick={handleSubmit}>
               Submit Joke 🚀
@@ -285,7 +341,9 @@ export default function App() {
       </main>
 
       <footer style={styles.footer}>
-        <p>Dad Jokes Central · Dockerized with ❤️ · Express + React + PostgreSQL</p>
+        <p>
+          Dad Jokes Central · Dockerized with ❤️ · Express + React + PostgreSQL
+        </p>
       </footer>
     </div>
   );
@@ -460,5 +518,36 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "2rem 1rem",
     color: "#475569",
     fontSize: "0.8rem",
+  },
+  // --- Share bar ---
+  shareBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.5rem",
+    marginTop: "1rem",
+    paddingTop: "1rem",
+    borderTop: "1px solid #2d3f5e",
+  },
+  shareLabel: {
+    fontSize: "0.75rem",
+    color: "#64748b",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    marginRight: "0.25rem",
+  },
+  shareBtn: {
+    padding: "0.4rem 0.85rem",
+    borderRadius: "9999px",
+    border: "1px solid #334155",
+    background: "#0f172a",
+    color: "#94a3b8",
+    fontSize: "0.82rem",
+    cursor: "pointer",
+  },
+  shareBtnCopied: {
+    borderColor: "#4ade80",
+    color: "#4ade80",
+    background: "rgba(74,222,128,0.08)",
   },
 };

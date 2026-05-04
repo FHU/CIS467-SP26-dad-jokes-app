@@ -1,7 +1,126 @@
-  # ---------- PostgreSQL Database ----------
+name: dadjokes
 
+services: 
+  # ---------- PostgreSQL Database ----------
+  db:
+    image: postgres:16-alpine
+    container_name: dadjokes-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_USER: dadjokes
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: dadjokes
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dadjokes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: dadjokes-pgadmin
+    ports:
+      - "8081:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   # ---------- Express API ----------
+  api:
+    build:
+      context: ./api
+      target: dev
+    container_name: dadjokes-api
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: dadjokes
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
+      REDIS_URL: redis://redis:6379
+      DB_NAME: dadjokes
+    secrets:
+      - postgres_password
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  
+    develop:
+      watch:
+        - path: ./api/src
+          action: sync 
+          target: /app/src
+        - path: ./api/package*.json
+          action: rebuild
+          target: /app/package*.json
+
+#--------- Redis Cache ----------
+  redis:
+    image: redis:7-alpine
+    container_name: dadjokes-redis
+    ports:
+      - "6379:6379" #local inspection
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
   # ---------- React Frontend (served by nginx) ----------
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    container_name: dadjokes-frontend
+    ports:
+      - 8080:5173
+    depends_on:
+      - api
+    restart: unless-stopped
+    command: ["npm","run","dev"]
+    develop:
+      watch:
+        - path: ./frontend/src
+          action: sync 
+          target: /app/src
+        - path: ./frontend/index.html
+          action: sync 
+          target: /app/index.html
+        - path: ./frontend/nginx.conf
+          action: sync+restart
+          target: /etc/nginx/conf.d/default.conf 
+        - path: ./frontend/package*.json
+          action: rebuild
+          target: /app/package*.json
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+
+
+volumes:
+
+  pgdata:
+  redis_data:
+  pgadmin_data:

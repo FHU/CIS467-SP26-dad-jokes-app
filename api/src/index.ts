@@ -1,6 +1,8 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { Pool } from "pg";
+import {readFileSync} from "fs";
+import { redis } from "./redis";
 
 // ---------------------------------------------------------------------------
 // Database connection
@@ -9,9 +11,10 @@ const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
   port: Number(process.env.DB_PORT) || 5432,
   user: process.env.DB_USER || "dadjokes",
-  password: process.env.DB_PASSWORD || "dadjokes",
+  password: readFileSync(process.env.DB_PASSWORD_FILE || "", "utf-8").trim(),
   database: process.env.DB_NAME || "dadjokes",
 });
+
 
 // Simple retry loop – the API container often starts before Postgres is ready.
 async function waitForDb(retries = 10, delay = 3000): Promise<void> {
@@ -54,12 +57,41 @@ app.get("/api/jokes", async (req: Request, res: Response) => {
   try {
     const { category } = req.query;
     let result;
+    let key = "jokes"
+    const TTL = 3600;
     if (category) {
+      key += `:${category}`
       result = await pool.query(
         "SELECT * FROM jokes WHERE category = $1 ORDER BY id",
         [category]
       );
     } else {
+      key += ":all"
+      // check cache
+      const cachedJokes = await redis.get(key)
+
+      //cache hit 
+      if (cachedJokes) {
+        console.log("⚡ Cache hit for jokes");
+        return res.json(JSON.parse(cachedJokes));
+      }
+      //cache miss
+      else{
+        console.log("⚡ Cache miss for jokes");
+        result = await pool.query("SELECT * FROM jokes ORDER BY id");
+        // store in cache for 1 hour
+        await redis.set(key, JSON.stringify(result.rows), 'EX', TTL);
+
+
+        return res.json(result.rows);
+      }
+
+
+
+
+
+
+
       result = await pool.query("SELECT * FROM jokes ORDER BY id");
     }
     res.json(result.rows);
@@ -111,6 +143,14 @@ app.post("/api/jokes", async (req: Request, res: Response) => {
       "INSERT INTO jokes (setup, punchline, category) VALUES ($1, $2, $3) RETURNING *",
       [setup, punchline, category || "general"]
     );
+    // Invalidate cache
+    await redis.del("jokes:all");
+    await redis.del(`jokes:${category || "general"}`);
+
+
+
+
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Error creating joke:", err);
